@@ -1,0 +1,90 @@
+#!/usr/bin/python
+#
+
+#curl https://www.eeb.ucla.edu/seminars.php?id=[1-800] -o "seminar_#1.html"
+
+#curl -L https://www.dropbox.com/s/u70dtrdr35p5tgk/seminars.tar.gz | tar zxv
+
+
+# sudo apt-get install dos2unix
+# dos2unix parse.py
+
+# This program requires a file name on the command line  
+# e.g.
+# ./parse.py some-file.html
+#
+
+# This import gets us the sys.exit fuction and the command line arguments via sys.argv
+import sys
+
+from bs4 import BeautifulSoup
+
+# Make sure we have a file to parse on the command line
+if len(sys.argv) < 2:
+    print "file name required"
+    sys.exit(1)
+
+# Parse the html file
+soup = BeautifulSoup(open(sys.argv[1])) #VA: Getting an error here
+
+# First we find the EcoEvoPub Grad series and record the date
+# The date is an <h4>"date"</h4> that follows <h3>Seminars</h3>
+# The EcoEvoPub and Grad series are <p> blocks that follow the date
+# Sometimes the EcoEvoPub has a <strong> tag, sometimes not
+
+# The basic approach is to select out the tags we are interested in and then
+# search through them one at a time looking for a known pattern
+
+# Select the tags
+tags = soup.find_all(["h4", "h3", "p", "strong"])
+
+# Sanity check to catch days with no scheduled presentations
+if len(tags) > 1:
+    # Initialize the flags
+    eco_evo_pub = False
+    graduate_presentations = False
+
+    # Loop over the extracted lines
+    for i in range(len(tags)):
+        if tags[i].string == "Seminars":               # If we found "Seminars" the next line is the date
+            date = tags[i + 1].string                  # Record the date
+        elif (tags[i].string == "EcoEvoPub Series" or  # Two tests here since some times there is
+              tags[i].string == "EcoEvoPub Series "):  # a trailing " "
+            eco_evo_pub = True                         # Record that this is EcoEcoPub
+        elif (tags[i].string == "Graduate Student Presentations" or # Same as above.  Somtimes
+              tags[i].string == "Graduate Student Presentations "): # there is a " ", sometimes not
+            graduate_presentations = True              # Record that this is a grad presentation
+
+    # Now we look for the names and departments and schools
+    # They are always in the <p> block following a <h4>Summary</h4> line
+    # Affiliations are the two lines following the name
+    #    NAME
+    #    DEPARTMENT
+    #    SCHOOL
+    # This next bit is a little tricky.
+    # As we loop over the lines we do the following
+    # 1) if this department is EEB record that
+    # 2) if the school is UCLA print the date (from above) and the name
+    # 3) if none of the above save the string and reset the flag
+
+    if eco_evo_pub and graduate_presentations:    # Don't search if not EcoEvoPub and Graduate
+        eeb = False                               # initialize our flag
+        tags = soup.find_all(["h4", "p"])         # find all the <h4> and <p> tags
+        for i in range(len(tags)):                # As above loop through the list
+            if (tags[i].name == "h4" and 
+                tags[i].string == "Summary"):     # test for <h4>Summary</h4>
+
+                # The next tag is going to be the <p> block that contains the names
+                # so we get the next tag (tags[i + 1]) and we loop over each line in that <p> block
+                for line in tags[i + 1].strings:
+                    # Test for the many strings that indecate EEB
+                    if (line == "Department of Ecology and Evolutionary Biology" or
+                        line == "Dept of Ecology and Evolutionary Biology" or
+                        line == "Deprt EEB" or
+                        line == "EEB"):
+                        eeb = True
+                    elif line == "UCLA" and eeb:  # Print only if UCLA and EEB
+                        print name, date
+                    else:                         # Not a department or a school - assume name
+                        name = line
+                        eeb = False               # Rest eeb flag
